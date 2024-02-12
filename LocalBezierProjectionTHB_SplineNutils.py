@@ -10,15 +10,13 @@ from matplotlib import cm
 import math, time
 import scipy
 import pickle
-from MHD_VMS_functions import *
-from MHD2DplottingFUNCTIONS import *
+# from MHD_VMS_functions import *
+# from MHD2DplottingFUNCTIONS import *
 import Tools
 import TestCases
 from THB_spline_functions import *
 import tools_nutils
 
-import cProfile
-import re
 
 def PlotData(topology, geometry, list_of_vars, ns, args, points, numPoints):
     # NumPoints = 20
