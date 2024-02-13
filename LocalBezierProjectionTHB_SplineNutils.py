@@ -369,13 +369,18 @@ ns.THBBasis = pbox.basis('th-spline', degree = degree)
 
 eps = numpy.infty
 
-eps_target = 1e-6
+eps_target = 1e-5
 pbox.MaxL = 9
+
+# eps_target = 1e-6
+# pbox.MaxL = 2
 
 iterCount = 0
 
 TimeList = []
 NumList = []
+
+pboxRefinement_list = []
 
 while eps > eps_target:
     iterCount += 1
@@ -404,11 +409,14 @@ while eps > eps_target:
     print(f'===============================================================')
     print(f'max element error {eps}')
     print(f'===============================================================')
+    print(pbox.topology.references)
 
-    elements_to_refine = numpy.where(element_error > eps_target)
+    elements_to_refine = numpy.where(element_error > eps_target * 1e-1)
     pbox_to_refine = numpy.unique(pbox.map_elem_pbox(elements_to_refine[0]))
 
     # print(f"Adding pboxes {[pbox_to_refine]}")
+
+    pboxRefinement_list.append(pbox_to_refine)
 
 
 
@@ -420,6 +428,9 @@ while eps > eps_target:
     if not altered:
         break
 
+print(pboxRefinement_list)
+
+quit()
 
 
 plt.plot(NumList,TimeList)

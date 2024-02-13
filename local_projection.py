@@ -123,30 +123,25 @@ def GenerateProjMatrices(self, THB_basis, bern_basis):
     # allocate memory for internal mapping. Needs to be implemented better
     pers_data = CalcC_BP_inv(bern_basis)
 
-    def generate_basis_data(basis):
-        # support = [basis.get_support(dof) for dof in range(basis.ndofs)]
-        dofs = [basis.get_dofs(ielem) for ielem in range(basis.nelems)]
-        # dofs = [[] for _ in range(basis.nelems)]
-        # for dof, elems in enumerate(support):
-        #     for elem in elems:
-        #         dofs[elem].append(dof)
-        return None, dofs
-
-    def generate_basis_data_integral_form(pbox, basis):
-        ns = Namespace()
-        ns.x = pbox.geometry
-        ns.basis = basis
-        # print(len(basis))
-        # # print(len(pbox.topology))
-        Int = pbox.topology.integrate_elementwise('basis_i' @ ns, degree = pbox.degree[0])
-        dofs = [numpy.where(Int[i,:]!=0) for i in range(Int.shape[0])]
-
-        return None, dofs
 
     t0 = time.time()
-    THB_support, THB_dofs = generate_basis_data(THB_basis)
+    THB_basis = self.topology.basis('th-spline', degree=self.degree)
+    print(f'   basis calc : {time.time() - t0:.6}')
+
+    print(f'   elems : {THB_basis.nelems}')
+    print(f'   dofs  : {THB_basis.ndofs}')
+
+    t0 = time.time()
+    # THB_support, THB_dofs = generate_basis_data(THB_basis)
+    THB_dofs = [THB_basis.get_dofs(ielem) for ielem in range(THB_basis.nelems)]
     # THB_support, THB_dofs = generate_basis_data_integral_form(self, THB_basis)
-    print(f'   support calc : {time.time() - t0}')
+    print(f'   support calc : {time.time() - t0:.6}')
+
+    t0 = time.time()
+    # THB_support, THB_dofs = generate_basis_data(THB_basis)
+    test = [THB_basis.get_coefficients(ielem) for ielem in range(THB_basis.nelems)]
+    # THB_support, THB_dofs = generate_basis_data_integral_form(self, THB_basis)
+    print(f'   coeffs calc : {time.time() - t0:.6}')
 
     timeData = [0,0,0,0,0,0]
     for proj in range(self.proj_count):
@@ -154,9 +149,9 @@ def GenerateProjMatrices(self, THB_basis, bern_basis):
         n = numpy.sort(n)
 
         t0 = time.time()
-        C, Cind, Bind, time0 = Coef_THB_Bern_element_list(n, THB_basis, bern_basis, pers_data, THB_support, THB_dofs)
+        C, Cind, Bind, time0 = Coef_THB_Bern_element_list(n, THB_basis, bern_basis, pers_data, None, THB_dofs)
 
-        timeData = [timeData[i] + time0[i] for i in range(4)]
+        timeData = [timeData[i] + time0[i] for i in range(5)]
 
 
         C_list[proj] = C
@@ -225,7 +220,7 @@ def project_bern(pbox, func, arguments):
     bern_basis = pbox.basis('discont',  degree = pbox.degree)
     print(f"Generate dis basis: {time.time() - t0}")
     t0 = time.time()
-    THB_basis =  pbox.basis('th-spline', degree = pbox.degree)
+    THB_basis = pbox.basis('th-spline', degree = pbox.degree)
     print(f"Generate THB basis: {time.time() - t0}")
 
 

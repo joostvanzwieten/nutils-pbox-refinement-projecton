@@ -129,7 +129,7 @@ class Pbox():
         if type == "discont":
             return tools_nutils.arb_basis_discontinuous(self.topology, degree)
         else:
-            return self.topology.basis(name= type, degree = degree, continuity = 0)
+            return self.topology.basis(name= type, degree = degree)
 
     def refined_by_pbox(self, refine):
         # map refine to pboxes over every level
@@ -148,8 +148,6 @@ class Pbox():
         active_indices_per_level = list(map(list, self.pbox_active_indices_per_level)) + [[]]
         refined_indices_per_level = list(map(list, self.pbox_refined_indices_per_level)) + [[]]
 
-
-        print(splits)
         if len(splits)>self.MaxL + 1:
             splits = splits[0:self.MaxL + 1]
         if numpy.sum(splits) == 0:
@@ -344,7 +342,7 @@ class Pbox():
     def GenerateProjectionElement(self):
         t0 = time.time()
         self.GenerateProjectionPbox()
-        print(f'projection pbox: {time.time() - t0}')
+        print(f'   projection pbox: {time.time() - t0}')
 
         t0 = time.time()
         offset = numpy.prod(self.degree)
