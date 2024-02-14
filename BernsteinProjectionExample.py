@@ -6,12 +6,52 @@ import nutils_poly as poly
 import numpy as np
 from matplotlib import pyplot as plt
 from unittest import TestCase
+import typing
+
+
+class UniformDiscontBasis(function.Basis):
+    '''A discontinuous basis with monotonic increasing dofs and the same coefficients for each element.
+
+    Parameters
+    ----------
+    coeffs : :class:`numpy.ndarray`
+        The coefficients of the basis functions for a single element.
+    nelems : :class:`int`
+        The number of elements.
+    index : :class:`Array`
+        The element index.
+    coords : :class:`Array`
+        The element local coordinates.
+    '''
+
+    def __init__(self, coeffs: np.ndarray, nelems: int, index: function.Array, coords: function.Array) -> None:
+        self.coeffs = np.array(coeffs)
+        if self.coeffs.ndim != 2:
+            raise ValueError(f"expected a coeffs array with 2 dimensions but got {self.coeffs.ndim}")
+        super().__init__(
+            ndofs=nelems * len(self.coeffs),
+            nelems=nelems,
+            index=index,
+            coords=coords,
+        )
+
+    def get_support(self, dof: typing.Union[int, np.ndarray]) -> np.ndarray:
+        if isinstance(dof, int):
+            return np.array([dof // len(self.coeffs)])
+        else:
+            return np.unique(dof // len(self.coeffs))
+
+    def f_dofs_coeffs(self, index: evaluable.Array) -> typing.Tuple[evaluable.Array, evaluable.Array]:
+        coeffs = evaluable.asarray(self.coeffs)
+        ndofs_per_elem = evaluable.asarray(len(self.coeffs))
+        dofs = evaluable.Range(ndofs_per_elem) + index * ndofs_per_elem
+        return dofs, coeffs
 
 
 def project_onto_discontinuous_basis(
         topo: Topology,
         geom: function.Array,
-        basis: function.DiscontBasis,
+        basis: typing.Union[function.DiscontBasis, UniformDiscontBasis],
         fun: function.Array,
         degree: int,
         arguments = {}) -> np.ndarray:
@@ -160,11 +200,11 @@ def arb_basis_discontinuous(topology, degree):
     # print(degree[0])
     # print(topology.references[0].ref1.get_poly_coeffs('bernstein', degree=3))
     if topology.references.isuniform:
-        coeffs = [_get_poly_coeffs(topology.references[0], degree)] * len(topology)
+        coeffs = _get_poly_coeffs(topology.references[0], degree)
+        return UniformDiscontBasis(coeffs, len(topology), topology.f_index, topology.f_coords)
     else:
         coeffs = [_get_poly_coeffs(ref, degree) for ref in topology.references]
-
-    return function.DiscontBasis(coeffs, topology.f_index, topology.f_coords)
+        return function.DiscontBasis(coeffs, topology.f_index, topology.f_coords)
 
 ns.basis = arb_basis_discontinuous(topology, degree)
 ns.fun = 'sin( Pi x_0 ) cos( Pi x_1 )'
