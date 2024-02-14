@@ -35,7 +35,10 @@ def arb_basis_discontinuous(topology, degree):
 
     # print(degree[0])
     # print(topology.references[0].ref1.get_poly_coeffs('bernstein', degree=3))
-    coeffs = [_get_poly_coeffs(ref, degree) for ref in topology.references]
+    if topology.references.isuniform:
+        coeffs = [_get_poly_coeffs(topology.references[0], degree)] * len(topology)
+    else:
+        coeffs = [_get_poly_coeffs(ref, degree) for ref in topology.references]
 
     return function.DiscontBasis(coeffs, topology.f_index, topology.f_coords)
 
