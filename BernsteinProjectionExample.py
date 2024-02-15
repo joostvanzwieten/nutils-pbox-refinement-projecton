@@ -1,5 +1,6 @@
 from nutils import mesh, function, sparse
 from nutils.expression_v2 import Namespace
+from tools_nutils import arb_basis_discontinuous
 import nutils_poly as poly
 import numpy as np
 from matplotlib import pyplot as plt
@@ -16,20 +17,20 @@ ns.x = geometry
 ns.Pi = np.pi
 
 # functions for discontinuous basis where the degree can be chosen arbitrary
-def _get_poly_coeffs(reference, degree):
-    p1 = reference.ref1.get_poly_coeffs('bernstein', degree=int(degree[0]))
-    p2 = reference.ref2.get_poly_coeffs('bernstein', degree=int(degree[1]))
-    plan = poly.MulPlan((poly.MulVar.Left, poly.MulVar.Right), degree[0], degree[1])
-    coeffs_LIST = [plan(p1[i, :], p2[j, :]) for i in range(p1.shape[0]) for j in range(p2.shape[0])]
-    return np.array(coeffs_LIST)
-
-def arb_basis_discontinuous(topology, degree):
-
-    # print(degree[0])
-    # print(topology.references[0].ref1.get_poly_coeffs('bernstein', degree=3))
-    coeffs = [_get_poly_coeffs(ref, degree) for ref in topology.references]
-
-    return function.DiscontBasis(coeffs, topology.f_index, topology.f_coords)
+# def _get_poly_coeffs(reference, degree):
+#     p1 = reference.ref1.get_poly_coeffs('bernstein', degree=int(degree[0]))
+#     p2 = reference.ref2.get_poly_coeffs('bernstein', degree=int(degree[1]))
+#     plan = poly.MulPlan((poly.MulVar.Left, poly.MulVar.Right), degree[0], degree[1])
+#     coeffs_LIST = [plan(p1[i, :], p2[j, :]) for i in range(p1.shape[0]) for j in range(p2.shape[0])]
+#     return np.array(coeffs_LIST)
+#
+# def arb_basis_discontinuous(topology, degree):
+#
+#     # print(degree[0])
+#     # print(topology.references[0].ref1.get_poly_coeffs('bernstein', degree=3))
+#     coeffs = [_get_poly_coeffs(ref, degree) for ref in topology.references]
+#
+#     return function.DiscontBasis(coeffs, topology.f_index, topology.f_coords)
 
 ns.basis = arb_basis_discontinuous(topology, degree)
 ns.fun = 'sin( Pi x_0 ) cos( Pi x_1 )'
