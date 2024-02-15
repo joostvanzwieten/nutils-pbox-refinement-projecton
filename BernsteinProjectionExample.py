@@ -1,11 +1,13 @@
 from nutils import mesh, function, sparse, evaluable
 from nutils.topology import Topology
 from nutils.expression_v2 import Namespace
-from tools_nutils import arb_basis_discontinuous
+from tools_nutils import arb_basis_discontinuous, integrate_elementwise_sparse
 import nutils_poly as poly
 import numpy as np
 from matplotlib import pyplot as plt
 from unittest import TestCase
+import time
+
 
 def project_onto_discontinuous_basis(
         topo: Topology,
@@ -126,47 +128,25 @@ class TestProjectOntoDiscontinuousBasis(TestCase):
 
 
 # setup domain and pick degrees (note that they can be different)
-N_elems = 4
-degree = np.array([3,2])
+N_elems = 2
+degree = np.array([1,1])
 topology, geometry = mesh.rectilinear([np.linspace(0,1,N_elems + 1),np.linspace(0,1,N_elems + 1)])
+topology = topology.refined_by([0])
 
+print(topology)
 
 ns = Namespace()
 ns.x = geometry
 ns.Pi = np.pi
 
-# functions for discontinuous basis where the degree can be chosen arbitrary
-# def _get_poly_coeffs(reference, degree):
-#     p1 = reference.ref1.get_poly_coeffs('bernstein', degree=int(degree[0]))
-#     p2 = reference.ref2.get_poly_coeffs('bernstein', degree=int(degree[1]))
-#     plan = poly.MulPlan((poly.MulVar.Left, poly.MulVar.Right), degree[0], degree[1])
-#     coeffs_LIST = [plan(p1[i, :], p2[j, :]) for i in range(p1.shape[0]) for j in range(p2.shape[0])]
-#     return np.array(coeffs_LIST)
-#
-# def arb_basis_discontinuous(topology, degree):
-#
-#     # print(degree[0])
-#     # print(topology.references[0].ref1.get_poly_coeffs('bernstein', degree=3))
-#     coeffs = [_get_poly_coeffs(ref, degree) for ref in topology.references]
-#
-#     return function.DiscontBasis(coeffs, topology.f_index, topology.f_coords)
-
 ns.basis = arb_basis_discontinuous(topology, degree)
 ns.fun = 'sin( Pi x_0 ) cos( Pi x_1 )'
+
+t0 = time.time()
 
 b = ns.basis * ns.fun
 mass = function.outer(ns.basis, ns.basis)
 Jacob = function.J(geometry)
-
-# function that does the exact same as integrate_elementwise, but does not reduce to a final dense matrix by removing the sparsity over elements.
-def integrate_elementwise_sparse(self, funcs, degree: int, asfunction: bool = False, ischeme: str = 'gauss',arguments=None):
-    'element-wise integration'
-    retvals = [retval for retval in self.sample(ischeme, degree).integrate_sparse(
-        [function.kronecker(func, pos=self.f_index, length=len(self), axis=0) for func in funcs],
-        arguments=arguments)]
-    return retvals
-
-
 
 # do integration, this returns a sparse matrix where the first dim described the element index, and the remaining indices are the global dofs
 b_sparse, mass_sparse = integrate_elementwise_sparse(topology, [b * Jacob, mass * Jacob] , degree=(max(degree) * 4 + 1))
@@ -201,7 +181,13 @@ for ielem in range(len(topology)):
     x[global_indices] = np.linalg.solve(mass_matrix, b_vec)
 
 
+print(f"Old :      {time.time() - t0:.6}")
+t0 = time.time()
 x = project_onto_discontinuous_basis(topology, geometry, ns.basis, ns.fun, max(degree) * 4 + 1)
+print(f"Improved : {time.time() - t0:.6}")
+
+
+print(x)
 
 # plot solution and find maximal error
 args = {"approx":x}
