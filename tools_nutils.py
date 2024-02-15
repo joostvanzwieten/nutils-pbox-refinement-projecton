@@ -3,6 +3,7 @@ import nutils.topology
 from nutils.expression_v2 import Namespace
 from nutils import function, mesh, solver, numeric, export, types, sparse
 from nutils import element, function, evaluable, _util as util, parallel, numeric, cache, transform, transformseq, warnings, types, points, sparse
+from nutils.element import LineReference, TensorReference
 from nutils._util import single_or_multiple
 from functools import cached_property
 from nutils.elementseq import References
@@ -90,11 +91,18 @@ def integrate_elementwise_sparse(self, funcs, degree: int, asfunction: bool = Fa
 
 
 def _get_poly_coeffs(reference, degree):
-    p1 = reference.ref1.get_poly_coeffs('bernstein', degree=int(degree[0]))
-    p2 = reference.ref2.get_poly_coeffs('bernstein', degree=int(degree[1]))
-    plan = poly.MulPlan((poly.MulVar.Left, poly.MulVar.Right), degree[0], degree[1])
-    coeffs_LIST = [plan(p1[i, :], p2[j, :]) for i in range(p1.shape[0]) for j in range(p2.shape[0])]
-    return numpy.array(coeffs_LIST)
+    assert len(degree) == reference.ndims
+    if len(degree) == 1:
+        assert isinstance(reference, LineReference)
+        return reference.get_poly_coeffs('bernstein', degree[0].__index__())
+    else:
+        assert isinstance(reference, TensorReference)
+        ref1 = reference.ref1
+        ref2 = reference.ref2
+        p1 = _get_poly_coeffs(ref1, degree[:ref1.ndims])
+        p2 = _get_poly_coeffs(ref2, degree[ref1.ndims:])
+        coeffs = poly.mul_different_vars(p1[:, None], p2[None, :], ref1.ndims, ref2.ndims)
+        return coeffs.reshape(-1, coeffs.shape[-1])
 
 def arb_basis_discontinuous(topology, degree):
 
