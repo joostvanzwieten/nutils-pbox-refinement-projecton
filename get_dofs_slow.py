@@ -91,6 +91,18 @@ t0 = time.time()
 dofs_element = [THB_basis.get_coefficients(ielem) for ielem in range(THB_basis.nelems)]
 print(f'generating coeffs list : {time.time() - t0:0.6} seconds')
 
+# get the dofs list
+t0 = time.time()
+dofs_element = [THB_basis.get_dofs(ielem) for ielem in range(THB_basis.nelems)]
+print(f'generating dofs list   :  {time.time() - t0:0.6} seconds')
+
+# get the coefficients list
+t0 = time.time()
+dofs_element = [THB_basis.get_coefficients(ielem) for ielem in range(THB_basis.nelems)]
+print(f'generating coeffs list : {time.time() - t0:0.6} seconds')
+
+
+
 
 # on my laptop, this script results in the following timings:
 # Creating THB basis     : 5.37516 seconds
