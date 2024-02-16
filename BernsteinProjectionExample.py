@@ -1,29 +1,35 @@
 from nutils import mesh, function, sparse, evaluable
+from nutils.element import LineReference, TensorReference
 from nutils.topology import Topology
 from nutils.expression_v2 import Namespace
-from tools_nutils import arb_basis_discontinuous, integrate_elementwise_sparse
+from tools_nutils import arb_basis_discontinuous, integrate_elementwise_sparse, UniformDiscontBasis
 import nutils_poly as poly
 import numpy as np
 from matplotlib import pyplot as plt
 from unittest import TestCase
+import typing
 import time
 
 
 def project_onto_discontinuous_basis(
         topo: Topology,
         geom: function.Array,
-        basis: function.DiscontBasis,
+        basis: typing.Union[function.DiscontBasis, UniformDiscontBasis],
         fun: function.Array,
         degree: int,
         arguments = {}) -> np.ndarray:
     '''Returns the projection coefficients of `fun` onto the discontinuous `basis`.
+
     Given a topology `topo`, a geometry `geom` for `topo` and a discontinuous
     basis `basis`, this function computes the projection coefficients of `fun`
     onto `basis`, using a gauss quadrature scheme for the exact integration of
     functions of degree `degree`. For an exact projection, `degree` must be the
     sum of the degree of the `basis` and of `fun`.
+
     This function does not verify that the supplied `basis` is discontinuous.
+
     This function is equivalent to, but faster than,
+
     ```
     from nutils import function, solver
     coeffs = solver.optimize(
@@ -129,7 +135,7 @@ class TestProjectOntoDiscontinuousBasis(TestCase):
 
 # setup domain and pick degrees (note that they can be different)
 N_elems = 2
-degree = np.array([1,1])
+degree = np.array([3,2])
 topology, geometry = mesh.rectilinear([np.linspace(0,1,N_elems + 1),np.linspace(0,1,N_elems + 1)])
 topology = topology.refined_by([0])
 
@@ -143,44 +149,7 @@ ns.basis = arb_basis_discontinuous(topology, degree)
 ns.fun = 'sin( Pi x_0 ) cos( Pi x_1 )'
 
 t0 = time.time()
-
-b = ns.basis * ns.fun
-mass = function.outer(ns.basis, ns.basis)
-Jacob = function.J(geometry)
-
-# do integration, this returns a sparse matrix where the first dim described the element index, and the remaining indices are the global dofs
-b_sparse, mass_sparse = integrate_elementwise_sparse(topology, [b * Jacob, mass * Jacob] , degree=(max(degree) * 4 + 1))
-x = np.zeros(ns.basis.ndofs)
-
-# the following function gets the local dense matrix associated for the element index ielem, it also returns the associated global dofs
-def get_local_elem(sparse_data, ielem):
-    indices, values, shape = sparse.extract(sparse_data)
-    ndim = len(shape) - 1
-
-    mask = np.where(indices[0] == ielem)
-    global_index_list = [ indices[dim + 1][mask] for dim in range(ndim)]
-    local_index_list  = [{global_index:local_index  for local_index, global_index in enumerate(np.unique(global_index_list[dim]))} for dim in range(ndim)]
-
-    local_data = np.zeros([len(local_index_list[dim].keys()) for dim in range(ndim)])
-
-    for i, val in enumerate(values[mask]):
-        global_index = [global_index_list[dim][i] for dim in range(ndim)]
-        local_index = tuple( [local_index_list[dim][index] for dim, index in enumerate(global_index)] )
-        local_data[local_index] = val
-
-    return local_data, [np.unique(global_index) for global_index in global_index_list ]
-
-
-
-for ielem in range(len(topology)):
-    # get local vector and matrices
-    b_vec, global_indices = get_local_elem(b_sparse, ielem)
-    mass_matrix, _ = get_local_elem(mass_sparse, ielem)
-
-    # solve local projection and store at correct global dofs
-    x[global_indices] = np.linalg.solve(mass_matrix, b_vec)
-
-
+x = project_onto_discontinuous_basis(topology, geometry, ns.basis, ns.fun, max(degree) * 4 + 1)
 print(f"Old :      {time.time() - t0:.6}")
 t0 = time.time()
 x = project_onto_discontinuous_basis(topology, geometry, ns.basis, ns.fun, max(degree) * 4 + 1)

@@ -10,6 +10,7 @@ from nutils.elementseq import References
 from nutils.pointsseq import PointsSequence
 from nutils.sample import Sample
 import nutils_poly as poly
+import typing
 
 
 # contains code that are either somewhere in nutils that I have not yet found, or functions in nutils that have need to be extended for my use case.
@@ -111,3 +112,41 @@ def arb_basis_discontinuous(topology, degree):
         coeffs = [_get_poly_coeffs(ref, degree) for ref in topology.references]
 
     return function.DiscontBasis(coeffs, topology.f_index, topology.f_coords)
+
+class UniformDiscontBasis(function.Basis):
+    '''A discontinuous basis with monotonic increasing dofs and the same coefficients for each element.
+
+    Parameters
+    ----------
+    coeffs : :class:`numpy.ndarray`
+        The coefficients of the basis functions for a single element.
+    nelems : :class:`int`
+        The number of elements.
+    index : :class:`Array`
+        The element index.
+    coords : :class:`Array`
+        The element local coordinates.
+    '''
+
+    def __init__(self, coeffs: numpy.ndarray, nelems: int, index: function.Array, coords: function.Array) -> None:
+        self.coeffs = numpy.array(coeffs)
+        if self.coeffs.ndim != 2:
+            raise ValueError(f"expected a coeffs array with 2 dimensions but got {self.coeffs.ndim}")
+        super().__init__(
+            ndofs=nelems * len(self.coeffs),
+            nelems=nelems,
+            index=index,
+            coords=coords,
+        )
+
+    def get_support(self, dof: typing.Union[int, numpy.ndarray]) -> numpy.ndarray:
+        if isinstance(dof, int):
+            return numpy.array([dof // len(self.coeffs)])
+        else:
+            return numpy.unique(dof // len(self.coeffs))
+
+    def f_dofs_coeffs(self, index: evaluable.Array) -> typing.Tuple[evaluable.Array, evaluable.Array]:
+        coeffs = evaluable.asarray(self.coeffs)
+        ndofs_per_elem = evaluable.asarray(len(self.coeffs))
+        dofs = evaluable.Range(ndofs_per_elem) + index * ndofs_per_elem
+        return dofs, coeffs
