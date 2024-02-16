@@ -188,6 +188,7 @@ print(f"Improved : {time.time() - t0:.6}")
 
 
 print(x)
+# quit()
 
 # plot solution and find maximal error
 args = {"approx":x}
