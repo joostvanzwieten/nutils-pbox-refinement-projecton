@@ -249,8 +249,8 @@ def AccuracyTest():
     plt.legend(timeList.keys())
     plt.show()
 
-# AccuracyTest()
-# quit()
+AccuracyTest()
+quit()
 
 r_elems = (2, 2)
 # r_elems = (4, 4)
@@ -428,9 +428,9 @@ while eps > eps_target:
     if not altered:
         break
 
-print(pboxRefinement_list)
-
-quit()
+# print(pboxRefinement_list)
+#
+# quit()
 
 
 plt.plot(NumList,TimeList)

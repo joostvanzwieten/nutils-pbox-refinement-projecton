@@ -4,6 +4,7 @@ import nutils.topology
 from nutils.expression_v2 import Namespace
 from nutils import function, mesh, solver, numeric, export, types, sparse
 from nutils import element, function, evaluable, _util as util, parallel, numeric, cache, transform, transformseq, warnings, types, points, sparse
+from nutils.topology import Topology
 from nutils._util import single_or_multiple
 from functools import cached_property
 from nutils.elementseq import References
@@ -12,6 +13,8 @@ from nutils.sample import Sample
 import tools_nutils
 import time
 import scipy
+import typing
+from tools_nutils import UniformDiscontBasis
 
 
 
@@ -266,63 +269,83 @@ def project_bern(pbox, func, arguments):
 
     return args
 
+def project_onto_discontinuous_basis(
+        topo: Topology,
+        geom: function.Array,
+        basis: typing.Union[function.DiscontBasis, UniformDiscontBasis],
+        fun: function.Array,
+        degree: int,
+        arguments = {}) -> np.ndarray:
+    '''Returns the projection coefficients of `fun` onto the discontinuous `basis`.
+
+    Given a topology `topo`, a geometry `geom` for `topo` and a discontinuous
+    basis `basis`, this function computes the projection coefficients of `fun`
+    onto `basis`, using a gauss quadrature scheme for the exact integration of
+    functions of degree `degree`. For an exact projection, `degree` must be the
+    sum of the degree of the `basis` and of `fun`.
+
+    This function does not verify that the supplied `basis` is discontinuous.
+
+    This function is equivalent to, but faster than,
+
+    ```
+    from nutils import function, solver
+    coeffs = solver.optimize(
+        'coeffs',
+        topo.integral((function.dotarg('coeffs', basis) - fun)**2 * function.J(geom), degree=degree),
+        arguments=arguments,
+    )
+    ```
+    '''
+
+    # Create a sample on `topo` with gauss quadrature points for exact
+    # integration of functions of degree `degree`.
+    smpl = topo.sample('gauss', degree)
+
+    # We use an evaluable loop to evaluate the projection for each element.
+    # `ielem` is the element number, used a.o. to obtain the local basis
+    # coefficients and dofs and the quadrature weights. `lower_args` is a
+    # representation of the local elemement with index `ielem`, used to lower
+    # `function.Array` to `evaluable.Array`.
+    ielem = evaluable.loop_index('elems', smpl.nelems)
+    lower_args = smpl.get_lower_args(ielem)
+
+    # Define the approximate element integral `elem_int` using the quadrature
+    # scheme from `smpl`, scaled with the geometry `geom`.
+    weights = smpl.get_evaluable_weights(ielem) * function.jacobian(geom, topo.ndims).lower(lower_args)
+    elem_int = lambda integrand: evaluable.einsum('A,AB->B', weights, integrand)
+
+    # Obtain the local dofs and coefficients from `basis` at element `ielem`.
+    dofs, basis_coeffs = basis.f_dofs_coeffs(ielem)
+
+    # Sample the local basis in the local coordinates. The first axes of
+    # `shapes` correspond to `weights`, the last axis has length `basis.ndofs`
+    shapes = evaluable.Polyval(basis_coeffs, topo.f_coords.lower(lower_args))
+
+    # Compute the local mass matrix and right hand side.
+    mass = elem_int(evaluable.einsum('Ai,Aj->Aij', shapes, shapes))
+    rhs = elem_int(evaluable.einsum('Ai,AB->AiB', shapes, fun.lower(lower_args)))
+
+    # Solve the local least squares problem.
+    local_proj_coeffs = evaluable.einsum('ij,jB->Bi', evaluable.inverse(mass), rhs)
+
+    # Scatter the local projection coefficients to the global coefficients and
+    # do this for every element in the topology.
+    proj_coeffs = evaluable.Inflate(local_proj_coeffs, dofs, evaluable.asarray(basis.ndofs))
+    proj_coeffs = evaluable.loop_sum(proj_coeffs, ielem)
+    proj_coeffs = evaluable.Transpose.from_end(proj_coeffs, 0)
+
+    # Evaluate.
+    return sparse.toarray(evaluable.eval_sparse((proj_coeffs,), **arguments)[0])
+
 def project_element_bern(pbox, fun, arguments, basis = None):
     t0 = time.time()
-
-    # degree = max(degree)
-    degree = pbox.degree
-    J = math.prod([d + 1 for d in degree])
-    G = [ 2 * BernGramMatrix(d) for d in degree]
-    Pmat = numpy.kron(G[0], G[1])
-
-    ns = Namespace()
-    ns.x = pbox.geometry
-
-    # ns.BernBasis = pbox.arb_basis_discontinuous(pbox.degree)
     if basis is None:
-        basis = pbox.basis('discont', degree=pbox.degree)
-
-    # print(basis._arg_coeffs.value)
-    # print(basis._coeffs[0])
-
-    # basis._arg_coeffs.value = numpy.matmul(Pmat, basis._arg_coeffs.value)
-    # basis._arg_coeffs.value = 2 * basis._arg_coeffs.value
-    # print(basis._arg_coeffs.value)
-    # print(Pmat)
-    bAlt = basis * fun
-    proj = function.outer(basis)
-    Jacob = function.J(pbox.geometry)
-
-    print(f"   Setup :{time.time() - t0}")
-    t0 = time.time()
-
-
-    b_sparse, Pmat_sparse = tools_nutils.integrate_elementwise_sparse(pbox.topology, [bAlt * Jacob, proj * Jacob] , degree=(max(degree) * 2 + 1), arguments=arguments)
-    print(f"   Integrate :{time.time() - t0}")
-    t0 = time.time()
-
-    # b_projected = b_sparse.copy()
-
-    # print(b_projected[0]['value'])
-    indices, values, shape = sparse.extract(b_sparse)
-    indices, values, shape = sparse.extract(b_sparse)
-
-    # print(Pmat.shape)
-    print(f"   Setup 2 :{time.time() - t0}")
-    t0 = time.time()
-    for n in range(shape[0]):
-        values[n * J:n * J + J] = numpy.matmul(Pmat, values[n * J:n * J + J])
-        # values[n * J:n * J + J] = values[n * J:n * J + J]
+        basis = pbox.basis('discont',degree = pbox.degree)
+    args = {"bern":project_onto_discontinuous_basis(topo = pbox.topology, geom = pbox.geometry, basis = basis, fun=fun, degree = max(pbox.degree) * 4 + 1)}
     print(f"   Projection :{time.time() - t0}")
-    t0 = time.time()
-    for n in range(shape[0]):
-        values[n * J:n * J + J] = values[n * J:n * J + J] / pbox.elem_size(n)
-    print(f"   elem Scaling :{time.time() - t0}")
 
-    b_sparse['value'] = values
-    args = {"bern" : values}
-
-    return b_sparse, args
+    return None, args
 
 def project_THB(pbox, func, arguments):
     pbox.GenerateProjectionElement()
