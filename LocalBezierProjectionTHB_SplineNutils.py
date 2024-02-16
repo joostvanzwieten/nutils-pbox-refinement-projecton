@@ -13,7 +13,6 @@ import pickle
 # from MHD_VMS_functions import *
 # from MHD2DplottingFUNCTIONS import *
 import Tools
-import TestCases
 from THB_spline_functions import *
 import tools_nutils
 
